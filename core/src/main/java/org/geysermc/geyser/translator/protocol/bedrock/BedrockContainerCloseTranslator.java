@@ -36,6 +36,8 @@ import org.geysermc.geyser.translator.protocol.Translator;
 import org.geysermc.geyser.translator.protocol.java.inventory.JavaMerchantOffersTranslator;
 import org.geysermc.geyser.util.InventoryUtils;
 
+import java.util.concurrent.TimeUnit;
+
 @Translator(packet = ContainerClosePacket.class)
 public class BedrockContainerCloseTranslator extends PacketTranslator<ContainerClosePacket> {
 
@@ -57,9 +59,14 @@ public class BedrockContainerCloseTranslator extends PacketTranslator<ContainerC
             if (openInventory instanceof Container container && !(container instanceof MerchantContainer) && !container.isUsingRealBlock()) {
                 if (session.getContainerOpenAttempts() < 3) {
                     session.setContainerOpenAttempts(session.getContainerOpenAttempts() + 1);
-                    session.getInventoryTranslator().openInventory(session, session.getOpenInventory());
-                    session.getInventoryTranslator().updateInventory(session, session.getOpenInventory());
-                    session.getOpenInventory().setDisplayed(true);
+                    // Add a longer delay before reopening to allow Bedrock to process the close
+                    session.scheduleInEventLoop(() -> {
+                        if (session.getOpenInventory() != null) {
+                            session.getInventoryTranslator().openInventory(session, session.getOpenInventory());
+                            session.getInventoryTranslator().updateInventory(session, session.getOpenInventory());
+                            session.getOpenInventory().setDisplayed(true);
+                        }
+                    }, 25000, TimeUnit.MILLISECONDS);
                     return;
                 } else {
                     GeyserImpl.getInstance().getLogger().debug("Exceeded 3 attempts to open a virtual inventory!");
